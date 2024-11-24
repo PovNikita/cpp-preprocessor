@@ -14,8 +14,116 @@ path operator""_p(const char* data, std::size_t sz) {
     return path(data, data + sz);
 }
 
-// напишите эту функцию
-bool Preprocess(const path& in_file, const path& out_file, const vector<path>& include_directories);
+
+  /**
+   * @brief Find file in the given directory.
+   *
+   * @param directory   The path of directory where need to search.
+   * @param filename    The name of file what need to find.
+   * @param result      The path to save the path of found file.
+   * @param __flags Controls how the regular expression is matched.
+   *
+   * @retval true  File was found.
+   * @retval false Otherwise.
+   *
+   */
+//Find file const string& filename in const path& directory. If this file was found, return 0 and write path in result
+bool FindFile(const path& directory, const string& filename, path& result) {
+    error_code err;
+    for (const filesystem::directory_entry& dir_ent : filesystem::recursive_directory_iterator(directory, err))
+    {
+        if(dir_ent.is_regular_file(err) && dir_ent.path().filename() == filename)
+        {
+            result = dir_ent.path();
+            return 0;
+        }
+    }
+    return true;
+}
+
+bool Preprocess(const path& in_file, const path& out_file, const vector<path>& include_directories)
+{
+    error_code err;
+    static regex inc_reg(R"l(\s*#\s*include\s*"([^"]*)"\s*)l");
+    static regex inc_reg2(R"l(\s*#\s*include\s*<([^>]*)>\s*)l");
+    smatch m;
+    ifstream input(in_file);
+    if(!input)
+    {
+        return false;
+    }
+    else
+    {
+        uint32_t line_count = 0;
+        fstream output(out_file, ios::out | ios::app);
+        while(input.rdstate() == ios_base::goodbit)
+        {
+            string line;
+            getline(input, line);
+            ++line_count;
+            if(regex_match(line, m, inc_reg))
+            {
+                path p = in_file.parent_path();
+                p = p / path(m[1].str());
+                if(!Preprocess(p, out_file, include_directories))
+                {
+                    bool is_ok = false;
+                    for(const path& pth : include_directories)
+                    {
+                        if(!FindFile(pth, p.filename(), p))
+                        {
+                            is_ok = Preprocess(p, out_file, include_directories);
+                            break;
+                        }
+                    }
+                    if(!is_ok)
+                    {
+                        cout << "unknown include file "s << m[1] << " at file "s << in_file.string() <<" at line "s << line_count << endl;
+                        return false;
+                    }
+                }
+            }
+            else if(regex_match(line, m, inc_reg2))
+            {
+                path p;
+                bool is_ok = false;
+                for(const path& pth : include_directories)
+                {
+                    if(!FindFile(pth, path(m[1].str()).filename(), p))
+                    {
+                        is_ok = Preprocess(p, out_file, include_directories);
+                        break;
+                    }
+                }
+                if(!is_ok)
+                {
+                    cout << "unknown include file "s << m[1] << " at file "s << in_file.string() <<" at line "s << line_count << endl;
+                    return false;
+                }
+            }
+            else
+            {
+                if(line.empty())
+                {
+                    if(input.rdstate() == ios_base::goodbit)
+                    {
+                        output << endl;
+                    }
+                }
+                else
+                {
+                    output << line << endl;
+                }
+            }
+            if(input.rdstate() != ios_base::goodbit)
+            {
+                break;
+            }
+        }
+            
+    }
+    return true;
+}
 
 string GetFileContents(string file) {
     ifstream stream(file);
