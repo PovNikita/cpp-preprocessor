@@ -41,6 +41,11 @@ bool FindFile(const path& directory, const string& filename, path& result) {
     return true;
 }
 
+void Error(string unkn_file, string file, uint32_t line)
+{
+    cout << "unknown include file "s << unkn_file << " at file "s << file <<" at line "s << line << endl;
+}
+
 bool Preprocess(const path& in_file, const path& out_file, const vector<path>& include_directories)
 {
     error_code err;
@@ -52,44 +57,27 @@ bool Preprocess(const path& in_file, const path& out_file, const vector<path>& i
     {
         return false;
     }
-    else
+    uint32_t line_count = 0;
+    fstream output(out_file, ios::out | ios::app);
+    if(!output)
     {
-        uint32_t line_count = 0;
-        fstream output(out_file, ios::out | ios::app);
-        while(input.rdstate() == ios_base::goodbit)
+        return false;
+    }
+    while(input.rdstate() == ios_base::goodbit)
+    {
+        string line;
+        getline(input, line);
+        ++line_count;
+        if(regex_match(line, m, inc_reg))
         {
-            string line;
-            getline(input, line);
-            ++line_count;
-            if(regex_match(line, m, inc_reg))
+            path p = in_file.parent_path();
+            p = p / path(m[1].str());
+            if(!Preprocess(p, out_file, include_directories))
             {
-                path p = in_file.parent_path();
-                p = p / path(m[1].str());
-                if(!Preprocess(p, out_file, include_directories))
-                {
-                    bool is_ok = false;
-                    for(const path& pth : include_directories)
-                    {
-                        if(!FindFile(pth, p.filename(), p))
-                        {
-                            is_ok = Preprocess(p, out_file, include_directories);
-                            break;
-                        }
-                    }
-                    if(!is_ok)
-                    {
-                        cout << "unknown include file "s << m[1] << " at file "s << in_file.string() <<" at line "s << line_count << endl;
-                        return false;
-                    }
-                }
-            }
-            else if(regex_match(line, m, inc_reg2))
-            {
-                path p;
                 bool is_ok = false;
                 for(const path& pth : include_directories)
                 {
-                    if(!FindFile(pth, path(m[1].str()).filename(), p))
+                    if(!FindFile(pth, p.filename(), p))
                     {
                         is_ok = Preprocess(p, out_file, include_directories);
                         break;
@@ -97,31 +85,48 @@ bool Preprocess(const path& in_file, const path& out_file, const vector<path>& i
                 }
                 if(!is_ok)
                 {
-                    cout << "unknown include file "s << m[1] << " at file "s << in_file.string() <<" at line "s << line_count << endl;
+                    Error(m[1], in_file.string(), line_count);
                     return false;
+                }
+            }
+        }
+        else if(regex_match(line, m, inc_reg2))
+        {
+            path p;
+            bool is_ok = false;
+            for(const path& pth : include_directories)
+            {
+                if(!FindFile(pth, path(m[1].str()).filename(), p))
+                {
+                    is_ok = Preprocess(p, out_file, include_directories);
+                    break;
+                }
+            }
+            if(!is_ok)
+            {
+                Error(m[1], in_file.string(), line_count);
+                return false;
+            }
+        }
+        else
+        {
+            if(line.empty())
+            {
+                if(input.rdstate() == ios_base::goodbit)
+                {
+                    output << endl;
                 }
             }
             else
             {
-                if(line.empty())
-                {
-                    if(input.rdstate() == ios_base::goodbit)
-                    {
-                        output << endl;
-                    }
-                }
-                else
-                {
-                    output << line << endl;
-                }
-            }
-            if(input.rdstate() != ios_base::goodbit)
-            {
-                break;
+                output << line << endl;
             }
         }
-            
-    }
+        if(input.rdstate() != ios_base::goodbit)
+        {
+            break;
+        }
+    }    
     return true;
 }
 
