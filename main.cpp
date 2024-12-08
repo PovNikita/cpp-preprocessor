@@ -41,7 +41,7 @@ bool FindFile(const path& directory, const string& filename, path& result) {
     return true;
 }
 
-void Error(string unkn_file, string file, uint32_t line)
+void OutputError(const string& unkn_file, const string& file, uint32_t line)
 {
     cout << "unknown include file "s << unkn_file << " at file "s << file <<" at line "s << line << endl;
 }
@@ -85,7 +85,7 @@ bool Preprocess(const path& in_file, const path& out_file, const vector<path>& i
                 }
                 if(!is_ok)
                 {
-                    Error(m[1], in_file.string(), line_count);
+                    OutputError(m[1], in_file.string(), line_count);
                     return false;
                 }
             }
@@ -104,7 +104,7 @@ bool Preprocess(const path& in_file, const path& out_file, const vector<path>& i
             }
             if(!is_ok)
             {
-                Error(m[1], in_file.string(), line_count);
+                OutputError(m[1], in_file.string(), line_count);
                 return false;
             }
         }
